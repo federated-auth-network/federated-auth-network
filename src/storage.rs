@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use anyhow::anyhow;
 use did_toolkit::prelude::*;
+use josekit::jwk::Jwk;
 use std::time::SystemTime;
 
 pub trait StorageDriver {
@@ -10,7 +11,7 @@ pub trait StorageDriver {
 
 pub struct Storage<SD: StorageDriver> {
     driver: SD,
-    signing_key: jsonwebkey::JsonWebKey,
+    signing_key: Jwk,
 }
 
 impl<SD: StorageDriver> Storage<SD> {

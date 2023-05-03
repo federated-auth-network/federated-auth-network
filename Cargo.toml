@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-did-toolkit = "^0.1.0"
+did-toolkit = "^0.2.0"
 anyhow = "^1.0"
 davisjr = "^0.2.0"
-jsonwebkey = { version = "^0.3.0", features = ["jwt-convert", "generate"] }
-jws = "^0.2.0"
+josekit = "^0.8.0"
