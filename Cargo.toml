@@ -3,6 +3,9 @@ name = "federated-auth-network"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+did-toolkit = "^0.1.0"
+anyhow = "^1.0"
+davisjr = "^0.2.0"
+jsonwebkey = { version = "^0.3.0", features = ["jwt-convert", "generate"] }
+jws = "^0.2.0"
