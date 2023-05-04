@@ -65,8 +65,6 @@ impl<SD: StorageDriver> Storage<SD> {
                         )?,
                     )?);
 
-                    let signer = alg.signer_from_jwk(&self.signing_key)?;
-
                     let mut header = JwsHeader::new();
                     header.set_algorithm(alg.to_string());
 
@@ -77,7 +75,11 @@ impl<SD: StorageDriver> Storage<SD> {
                         content_type: "application/json+did".to_string()
                     });
 
-                    match serialize_compact(payload.to_string().as_bytes(), &header, &signer) {
+                    match serialize_compact(
+                        payload.to_string().as_bytes(),
+                        &header,
+                        &alg.signer_from_jwk(&self.signing_key)?,
+                    ) {
                         Ok(res) => Ok(ModifiedData::Modified(res)),
                         Err(e) => Err(e.into()),
                     }
