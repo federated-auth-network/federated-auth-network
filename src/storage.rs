@@ -18,7 +18,7 @@ fn jwk_alg_to_signing_alg(alg: EcCurve) -> EcdsaJwsAlgorithm {
     }
 }
 
-// TODO: convince josekit to prove this method
+// TODO: convince josekit to provide this method
 fn jwk_alg_from_str(s: &str) -> Result<EcCurve, anyhow::Error> {
     match s {
         "P-256" => Ok(EcCurve::P256),
