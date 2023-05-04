@@ -9,6 +9,7 @@ use josekit::{
 use serde::Serialize;
 use std::time::SystemTime;
 
+#[inline]
 fn jwk_alg_to_signing_alg(alg: EcCurve) -> EcdsaJwsAlgorithm {
     match alg {
         EcCurve::P256 => EcdsaJwsAlgorithm::Es256,
@@ -19,6 +20,7 @@ fn jwk_alg_to_signing_alg(alg: EcCurve) -> EcdsaJwsAlgorithm {
 }
 
 // TODO: convince josekit to provide this method
+#[inline]
 fn jwk_alg_from_str(s: &str) -> Result<EcCurve, anyhow::Error> {
     match s {
         "P-256" => Ok(EcCurve::P256),
