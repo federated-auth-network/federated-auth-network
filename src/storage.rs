@@ -42,7 +42,6 @@ pub enum ModifiedData {
 
 pub trait StorageDriver {
     fn load(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error>;
-    fn store(&self, doc: Document) -> Result<(), anyhow::Error>;
 }
 
 pub struct Storage<SD: StorageDriver> {
