@@ -70,10 +70,10 @@ impl<SD: StorageDriver> Storage<SD> {
                     let mut header = JwsHeader::new();
                     header.set_algorithm(alg.to_string());
 
-                    let json_doc = serde_json::json!(doc);
-
                     let payload = serde_json::json!(SignedPayload {
-                        payload: URL_SAFE_NO_PAD.encode(json_doc.to_string()).as_bytes(),
+                        payload: URL_SAFE_NO_PAD
+                            .encode(serde_json::json!(doc).to_string())
+                            .as_bytes(),
                         content_type: "application/json+did".to_string()
                     });
 
