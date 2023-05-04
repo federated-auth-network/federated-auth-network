@@ -7,7 +7,7 @@ use josekit::{
     jws::{alg::ecdsa::EcdsaJwsAlgorithm, serialize_compact, JwsHeader},
 };
 use serde::Serialize;
-use std::time::SystemTime;
+use std::{path::PathBuf, time::SystemTime};
 
 static MIME_JSON_DID: &str = "application/json+did";
 
@@ -110,12 +110,36 @@ pub struct FileSystemStorage<'a> {
     root: &'a str,
 }
 
+impl FileSystemStorage<'_> {
+    fn load_doc(&self, path: PathBuf) -> Result<(Document, SystemTime), anyhow::Error> {
+        let f = std::fs::OpenOptions::new();
+        let io = f.open(path)?;
+        let meta = io.metadata()?;
+        let doc: Document = serde_json::from_reader(io)?;
+        let modified = meta.modified()?;
+
+        Ok((doc, modified))
+    }
+}
+
 impl StorageDriver for FileSystemStorage<'_> {
     fn load_did(&self) -> Result<(Document, SystemTime), anyhow::Error> {
-        Err(anyhow!("unimplemented"))
+        let path = PathBuf::from(self.root).join("/fan.did");
+        self.load_doc(path)
     }
 
-    fn load(&self, _name: &str) -> Result<(Document, SystemTime), anyhow::Error> {
-        Err(anyhow!("unimplemented"))
+    fn load(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error> {
+        if name.contains(std::path::MAIN_SEPARATOR) {
+            return Err(anyhow!("name contains invalid characters"));
+        }
+
+        let path = PathBuf::from(self.root).join(&format!(
+            "{}user{}{}.did",
+            std::path::MAIN_SEPARATOR,
+            std::path::MAIN_SEPARATOR,
+            name
+        ));
+
+        self.load_doc(path)
     }
 }
