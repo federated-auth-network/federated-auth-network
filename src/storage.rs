@@ -9,6 +9,8 @@ use josekit::{
 use serde::Serialize;
 use std::time::SystemTime;
 
+static MIME_JSON_DID: &str = "application/json+did";
+
 #[inline]
 fn jwk_alg_to_signing_alg(alg: EcCurve) -> EcdsaJwsAlgorithm {
     match alg {
@@ -85,7 +87,7 @@ impl<SD: StorageDriver> Storage<SD> {
                         payload: URL_SAFE_NO_PAD
                             .encode(serde_json::json!(doc).to_string())
                             .as_bytes(),
-                        content_type: "application/json+did",
+                        content_type: MIME_JSON_DID,
                     });
 
                     match serialize_compact(
