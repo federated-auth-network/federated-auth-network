@@ -6,7 +6,7 @@ use josekit::{
     jwk::{alg::ec::EcCurve, Jwk},
     jws::{alg::ecdsa::EcdsaJwsAlgorithm, serialize_compact, JwsHeader},
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::time::SystemTime;
 
 fn jwk_alg_to_signing_alg(alg: EcCurve) -> EcdsaJwsAlgorithm {
@@ -29,7 +29,7 @@ fn jwk_alg_from_str(s: &str) -> Result<EcCurve, anyhow::Error> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct SignedPayload<'a> {
     payload: &'a [u8],
     content_type: String,
