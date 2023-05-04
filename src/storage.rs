@@ -46,7 +46,7 @@ pub enum ModifiedData {
 
 pub trait StorageDriver {
     fn load(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error>;
-    fn load_did(&self) -> Result<(Document, SystemTime), anyhow::Error>;
+    fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error>;
 }
 
 pub struct Storage<SD: StorageDriver> {
@@ -55,8 +55,8 @@ pub struct Storage<SD: StorageDriver> {
 }
 
 impl<SD: StorageDriver> Storage<SD> {
-    pub fn fetch_did(&self, if_modified_since: SystemTime) -> Result<ModifiedData, anyhow::Error> {
-        match self.driver.load_did() {
+    pub fn fetch_root(&self, if_modified_since: SystemTime) -> Result<ModifiedData, anyhow::Error> {
+        match self.driver.load_root() {
             Ok((doc, time)) => match if_modified_since.duration_since(time) {
                 Ok(_) => Ok(ModifiedData::Modified(serde_json::json!(doc).to_string())),
                 Err(_) => Ok(ModifiedData::NotModified),
@@ -123,7 +123,7 @@ impl FileSystemStorage<'_> {
 }
 
 impl StorageDriver for FileSystemStorage<'_> {
-    fn load_did(&self) -> Result<(Document, SystemTime), anyhow::Error> {
+    fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error> {
         let path = PathBuf::from(self.root).join("/fan.did");
         self.load_doc(path)
     }
