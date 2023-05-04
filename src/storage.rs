@@ -42,6 +42,7 @@ pub enum ModifiedData {
 
 pub trait StorageDriver {
     fn load(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error>;
+    fn load_did(&self) -> Result<(Document, SystemTime), anyhow::Error>;
 }
 
 pub struct Storage<SD: StorageDriver> {
@@ -50,6 +51,16 @@ pub struct Storage<SD: StorageDriver> {
 }
 
 impl<SD: StorageDriver> Storage<SD> {
+    pub fn fetch_did(&self, if_modified_since: SystemTime) -> Result<ModifiedData, anyhow::Error> {
+        match self.driver.load_did() {
+            Ok((doc, time)) => match if_modified_since.duration_since(time) {
+                Ok(_) => Ok(ModifiedData::Modified(serde_json::json!(doc).to_string())),
+                Err(_) => Ok(ModifiedData::NotModified),
+            },
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub fn fetch(
         &self,
         name: &str,
