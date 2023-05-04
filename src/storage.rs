@@ -105,3 +105,17 @@ impl<SD: StorageDriver> Storage<SD> {
         }
     }
 }
+
+pub struct FileSystemStorage<'a> {
+    root: &'a str,
+}
+
+impl StorageDriver for FileSystemStorage<'_> {
+    fn load_did(&self) -> Result<(Document, SystemTime), anyhow::Error> {
+        Err(anyhow!("unimplemented"))
+    }
+
+    fn load(&self, _name: &str) -> Result<(Document, SystemTime), anyhow::Error> {
+        Err(anyhow!("unimplemented"))
+    }
+}
