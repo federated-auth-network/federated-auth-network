@@ -34,7 +34,7 @@ fn jwk_alg_from_str(s: &str) -> Result<EcCurve, anyhow::Error> {
 #[derive(Serialize)]
 pub struct SignedPayload<'a> {
     payload: &'a [u8],
-    content_type: String,
+    content_type: &'a str,
 }
 
 pub enum ModifiedData {
@@ -85,7 +85,7 @@ impl<SD: StorageDriver> Storage<SD> {
                         payload: URL_SAFE_NO_PAD
                             .encode(serde_json::json!(doc).to_string())
                             .as_bytes(),
-                        content_type: "application/json+did".to_string()
+                        content_type: "application/json+did",
                     });
 
                     match serialize_compact(
