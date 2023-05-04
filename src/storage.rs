@@ -30,8 +30,8 @@ fn jwk_alg_from_str(s: &str) -> Result<EcCurve, anyhow::Error> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct SignedPayload {
-    payload: Vec<u8>,
+pub struct SignedPayload<'a> {
+    payload: &'a [u8],
     content_type: String,
 }
 
@@ -73,10 +73,7 @@ impl<SD: StorageDriver> Storage<SD> {
                     let json_doc = serde_json::json!(doc);
 
                     let payload = serde_json::json!(SignedPayload {
-                        payload: URL_SAFE_NO_PAD
-                            .encode(json_doc.to_string())
-                            .as_bytes()
-                            .to_vec(),
+                        payload: URL_SAFE_NO_PAD.encode(json_doc.to_string()).as_bytes(),
                         content_type: "application/json+did".to_string()
                     });
 
