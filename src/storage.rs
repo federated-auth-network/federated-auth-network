@@ -83,12 +83,12 @@ impl<SD: StorageDriver> Storage<SD> {
 
                     match serialize_compact(payload.to_string().as_bytes(), &header, &signer) {
                         Ok(res) => Ok(ModifiedData::Modified(res)),
-                        Err(e) => Err(anyhow!(e)),
+                        Err(e) => Err(e.into()),
                     }
                 }
                 Err(_) => Ok(ModifiedData::NotModified),
             },
-            Err(e) => Err(anyhow!(e)),
+            Err(e) => Err(e.into()),
         }
     }
 }
