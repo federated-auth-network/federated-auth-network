@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use anyhow::anyhow;
+use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use did_toolkit::prelude::*;
 use josekit::{
     jwk::{alg::ec::EcCurve, Jwk},
@@ -56,37 +57,37 @@ impl<SD: StorageDriver> Storage<SD> {
         if_modified_since: SystemTime,
     ) -> Result<ModifiedData, anyhow::Error> {
         match self.driver.load(name) {
-            Ok((doc, time)) => {
-                match if_modified_since.duration_since(time) {
-                    Ok(_) => {
-                        let alg = jwk_alg_to_signing_alg(jwk_alg_from_str(
-                            self.signing_key.algorithm().map_or_else(
-                                || Err(anyhow!("Invalid algorithm specified")),
-                                |s| Ok(s),
-                            )?,
-                        )?);
+            Ok((doc, time)) => match if_modified_since.duration_since(time) {
+                Ok(_) => {
+                    let alg = jwk_alg_to_signing_alg(jwk_alg_from_str(
+                        self.signing_key.algorithm().map_or_else(
+                            || Err(anyhow!("Invalid algorithm specified")),
+                            |s| Ok(s),
+                        )?,
+                    )?);
 
-                        let signer = alg.signer_from_jwk(&self.signing_key)?;
+                    let signer = alg.signer_from_jwk(&self.signing_key)?;
 
-                        let mut header = JwsHeader::new();
-                        header.set_algorithm(alg.to_string());
+                    let mut header = JwsHeader::new();
+                    header.set_algorithm(alg.to_string());
 
-                        let json_doc = serde_json::json!(doc);
+                    let json_doc = serde_json::json!(doc);
 
-                        // FIXME: base64
-                        let payload = serde_json::json!(SignedPayload {
-                            payload: json_doc.to_string().as_bytes().to_vec(),
-                            content_type: "application/json+did".to_string()
-                        });
+                    let payload = serde_json::json!(SignedPayload {
+                        payload: URL_SAFE_NO_PAD
+                            .encode(json_doc.to_string())
+                            .as_bytes()
+                            .to_vec(),
+                        content_type: "application/json+did".to_string()
+                    });
 
-                        match serialize_compact(payload.to_string().as_bytes(), &header, &signer) {
-                            Ok(res) => Ok(ModifiedData::Modified(res)),
-                            Err(e) => Err(anyhow!(e)),
-                        }
+                    match serialize_compact(payload.to_string().as_bytes(), &header, &signer) {
+                        Ok(res) => Ok(ModifiedData::Modified(res)),
+                        Err(e) => Err(anyhow!(e)),
                     }
-                    Err(_) => Ok(ModifiedData::NotModified),
                 }
-            }
+                Err(_) => Ok(ModifiedData::NotModified),
+            },
             Err(e) => Err(anyhow!(e)),
         }
     }
