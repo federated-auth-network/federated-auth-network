@@ -24,7 +24,7 @@ trait StorageFetcher {
 
 #[derive(Clone)]
 struct FileSystemState {
-    pub(crate) storage: Storage<FileSystemStorage>,
+    storage: Storage<FileSystemStorage>,
 }
 
 impl StorageFetcher for FileSystemState {
