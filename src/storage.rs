@@ -70,7 +70,7 @@ impl<SD: StorageDriver + Clone + Send + ?Sized> Storage<SD> {
     fn encode_user(&self, doc: Document, mime: &str) -> Result<ModifiedData, anyhow::Error> {
         let alg = jwk_alg_to_signing_alg(jwk_alg_from_str(
             self.signing_key
-                .algorithm()
+                .curve()
                 .map_or_else(|| Err(anyhow!("Invalid algorithm specified")), |s| Ok(s))?,
         )?);
 
@@ -166,7 +166,8 @@ pub(crate) struct FileSystemStorage {
 
 impl FileSystemStorage {
     fn load_doc(&self, path: PathBuf) -> Result<(Document, SystemTime), anyhow::Error> {
-        let f = std::fs::OpenOptions::new();
+        let mut f = std::fs::OpenOptions::new();
+        f.read(true);
         let io = f.open(path)?;
         let meta = io.metadata()?;
 
@@ -184,9 +185,7 @@ impl FileSystemStorage {
 
 impl StorageDriver for FileSystemStorage {
     fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error> {
-        let path = self
-            .root
-            .join(std::path::MAIN_SEPARATOR.to_string() + ROOT_DID);
+        let path = self.root.join(ROOT_DID);
         self.load_doc(path)
     }
 
@@ -195,12 +194,9 @@ impl StorageDriver for FileSystemStorage {
             return Err(anyhow!("name contains invalid characters"));
         }
 
-        let path = self.root.join(&format!(
-            "{}user{}{}.did",
-            std::path::MAIN_SEPARATOR,
-            std::path::MAIN_SEPARATOR,
-            name
-        ));
+        let path = self
+            .root
+            .join(&format!("user{}{}.did", std::path::MAIN_SEPARATOR, name));
 
         self.load_doc(path)
     }

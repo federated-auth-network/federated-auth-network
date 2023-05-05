@@ -137,7 +137,11 @@ async fn get_user<
     let storage = storage.lock().await;
 
     modified(
-        storage.fetch_user(&params["name"], if_modified_since(&req)?, &accept)?,
+        storage.fetch_user(
+            &params["name"].strip_suffix(".did").unwrap(),
+            if_modified_since(&req)?,
+            &accept,
+        )?,
         "application/jose",
         req,
         state,
@@ -155,7 +159,7 @@ async fn configure_routes<
     Ok(())
 }
 
-async fn boot_filesystem(
+pub async fn boot_filesystem(
     addr: &str,
     root: PathBuf,
     cbor: bool,
@@ -175,6 +179,5 @@ async fn boot_filesystem(
     }
 
     app.serve(addr).await?;
-
     Ok(())
 }
