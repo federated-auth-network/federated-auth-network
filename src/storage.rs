@@ -7,9 +7,36 @@ use josekit::{
     jws::{alg::ecdsa::EcdsaJwsAlgorithm, serialize_compact, JwsHeader},
 };
 use serde::Serialize;
-use std::{path::PathBuf, time::SystemTime};
+use std::{path::PathBuf, str::FromStr, time::SystemTime};
 
-static MIME_JSON_DID: &str = "application/json+did";
+pub enum DIDMIMEType {
+    JSON,
+    CBOR,
+}
+
+impl FromStr for DIDMIMEType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
+        match s {
+            "application/json+did" => Ok(Self::JSON),
+            // we don't directly support JSON-LD, but we should be able to consume it
+            "application/jsonld+did" => Ok(Self::JSON),
+            "application/cbor+did" => Ok(Self::CBOR),
+            _ => Err(anyhow!("Invalid MIME type")),
+        }
+    }
+}
+
+impl ToString for DIDMIMEType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::JSON => "application/json+did",
+            Self::CBOR => "application/cbor+did",
+        }
+        .to_string()
+    }
+}
 
 #[inline]
 fn jwk_alg_to_signing_alg(alg: EcCurve) -> EcdsaJwsAlgorithm {
@@ -40,7 +67,7 @@ pub struct SignedPayload<'a> {
 }
 
 pub enum ModifiedData {
-    Modified(String),
+    Modified(Vec<u8>),
     NotModified,
 }
 
@@ -55,10 +82,29 @@ pub struct Storage<SD: StorageDriver> {
 }
 
 impl<SD: StorageDriver> Storage<SD> {
-    pub fn fetch_root(&self, if_modified_since: SystemTime) -> Result<ModifiedData, anyhow::Error> {
+    pub fn fetch_root(
+        &self,
+        if_modified_since: SystemTime,
+        mime: &str,
+    ) -> Result<ModifiedData, anyhow::Error> {
         match self.driver.load_root() {
             Ok((doc, time)) => match if_modified_since.duration_since(time) {
-                Ok(_) => Ok(ModifiedData::Modified(serde_json::json!(doc).to_string())),
+                Ok(_) => {
+                    let mut writer = std::io::Cursor::new(Vec::new());
+
+                    match DIDMIMEType::from_str(mime)? {
+                        DIDMIMEType::CBOR => {
+                            ciborium::ser::into_writer(&doc, &mut writer)?;
+                        }
+                        DIDMIMEType::JSON => {
+                            serde_json::to_writer(&mut writer, &doc)?;
+                        }
+                    }
+
+                    let res = writer.into_inner();
+
+                    Ok(ModifiedData::Modified(res))
+                }
                 Err(_) => Ok(ModifiedData::NotModified),
             },
             Err(e) => Err(e.into()),
@@ -69,6 +115,7 @@ impl<SD: StorageDriver> Storage<SD> {
         &self,
         name: &str,
         if_modified_since: SystemTime,
+        mime: &str,
     ) -> Result<ModifiedData, anyhow::Error> {
         match self.driver.load(name) {
             Ok((doc, time)) => match if_modified_since.duration_since(time) {
@@ -83,21 +130,44 @@ impl<SD: StorageDriver> Storage<SD> {
                     let mut header = JwsHeader::new();
                     header.set_algorithm(alg.to_string());
 
-                    let payload = serde_json::json!(SignedPayload {
-                        payload: URL_SAFE_NO_PAD
-                            .encode(serde_json::json!(doc).to_string())
-                            .as_bytes(),
-                        content_type: MIME_JSON_DID,
-                    });
+                    let mut writer = std::io::Cursor::new(Vec::new());
 
-                    match serialize_compact(
-                        payload.to_string().as_bytes(),
-                        &header,
-                        &alg.signer_from_jwk(&self.signing_key)?,
-                    ) {
-                        Ok(res) => Ok(ModifiedData::Modified(res)),
-                        Err(e) => Err(e.into()),
+                    match DIDMIMEType::from_str(mime)? {
+                        DIDMIMEType::JSON => {
+                            serde_json::to_writer(
+                                &mut writer,
+                                &SignedPayload {
+                                    payload: URL_SAFE_NO_PAD
+                                        .encode(serde_json::json!(doc).to_string())
+                                        .as_bytes(),
+                                    content_type: &DIDMIMEType::JSON.to_string(),
+                                },
+                            )?;
+                        }
+                        DIDMIMEType::CBOR => {
+                            let mut inner = std::io::Cursor::new(Vec::new());
+                            ciborium::ser::into_writer(&doc, &mut inner)?;
+                            let buf = inner.into_inner();
+                            let buf = URL_SAFE_NO_PAD.encode(&buf);
+
+                            let payload = SignedPayload {
+                                payload: buf.as_bytes(),
+                                content_type: &DIDMIMEType::CBOR.to_string(),
+                            };
+
+                            ciborium::ser::into_writer(&payload, &mut writer)?;
+                        }
                     }
+
+                    Ok(ModifiedData::Modified(
+                        serialize_compact(
+                            &writer.into_inner(),
+                            &header,
+                            &alg.signer_from_jwk(&self.signing_key)?,
+                        )?
+                        .as_bytes()
+                        .to_vec(),
+                    ))
                 }
                 Err(_) => Ok(ModifiedData::NotModified),
             },
@@ -108,6 +178,7 @@ impl<SD: StorageDriver> Storage<SD> {
 
 pub struct FileSystemStorage<'a> {
     root: &'a str,
+    cbor: bool,
 }
 
 impl FileSystemStorage<'_> {
@@ -115,7 +186,13 @@ impl FileSystemStorage<'_> {
         let f = std::fs::OpenOptions::new();
         let io = f.open(path)?;
         let meta = io.metadata()?;
-        let doc: Document = serde_json::from_reader(io)?;
+
+        let doc: Document = if self.cbor {
+            ciborium::de::from_reader(io)?
+        } else {
+            serde_json::from_reader(io)?
+        };
+
         let modified = meta.modified()?;
 
         Ok((doc, modified))
