@@ -3,9 +3,15 @@ use crate::{
     mime::{DIDMIMEType, ModifiedData},
     storage::{FileSystemStorage, Storage},
 };
+use anyhow::anyhow;
 use davisjr::prelude::*;
 use josekit::jwk::Jwk;
 use std::{path::PathBuf, time::SystemTime};
+use time::{format_description::FormatItem, macros::format_description, PrimitiveDateTime};
+
+static IF_MODIFIED_SINCE: &[FormatItem<'static>] = format_description!(
+    "[weekday repr:short], [day] [month repr:short] [year] [hour]:[minute]:[second] GMT"
+);
 
 trait StorageFetcher {
     fn fetch_root(
@@ -55,6 +61,17 @@ fn accept(req: &Request<Body>) -> String {
 }
 
 #[inline]
+fn if_modified_since(req: &Request<Body>) -> Result<Option<SystemTime>, anyhow::Error> {
+    match req.headers().get("If-Modified-Since") {
+        Some(since) => match PrimitiveDateTime::parse(since.to_str()?, IF_MODIFIED_SINCE) {
+            Ok(dt) => Ok(Some(dt.assume_utc().into())),
+            Err(e) => Err(anyhow!(e)),
+        },
+        None => Ok(None),
+    }
+}
+
+#[inline]
 fn modified<T>(md: ModifiedData, accept: &str, req: Request<Body>, state: T) -> HTTPResult<T> {
     match md {
         ModifiedData::Modified(res) => Ok((
@@ -91,7 +108,12 @@ async fn get_root<
     let storage = app.state().await.unwrap();
     let storage = storage.lock().await;
 
-    modified(storage.fetch_root(None, &accept)?, &accept, req, state)
+    modified(
+        storage.fetch_root(if_modified_since(&req)?, &accept)?,
+        &accept,
+        req,
+        state,
+    )
 }
 
 async fn get_user<
@@ -110,7 +132,7 @@ async fn get_user<
     let storage = storage.lock().await;
 
     modified(
-        storage.fetch_user(&params["name"], None, &accept)?,
+        storage.fetch_user(&params["name"], if_modified_since(&req)?, &accept)?,
         "application/jose",
         req,
         state,
