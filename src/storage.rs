@@ -84,29 +84,86 @@ pub struct Storage<SD: StorageDriver> {
 }
 
 impl<SD: StorageDriver> Storage<SD> {
+    fn encode_root(&self, doc: Document, mime: &str) -> Result<ModifiedData, anyhow::Error> {
+        let mut writer = std::io::Cursor::new(Vec::new());
+
+        match DIDMIMEType::from_str(mime)? {
+            DIDMIMEType::CBOR => {
+                ciborium::ser::into_writer(&doc, &mut writer)?;
+            }
+            DIDMIMEType::JSON => {
+                serde_json::to_writer(&mut writer, &doc)?;
+            }
+        }
+
+        Ok(ModifiedData::Modified(writer.into_inner()))
+    }
+
+    fn encode_user(&self, doc: Document, mime: &str) -> Result<ModifiedData, anyhow::Error> {
+        let alg = jwk_alg_to_signing_alg(jwk_alg_from_str(
+            self.signing_key
+                .algorithm()
+                .map_or_else(|| Err(anyhow!("Invalid algorithm specified")), |s| Ok(s))?,
+        )?);
+
+        let mut header = JwsHeader::new();
+        header.set_algorithm(alg.to_string());
+
+        let mut writer = std::io::Cursor::new(Vec::new());
+
+        match DIDMIMEType::from_str(mime)? {
+            DIDMIMEType::JSON => {
+                serde_json::to_writer(
+                    &mut writer,
+                    &SignedPayload {
+                        payload: URL_SAFE_NO_PAD
+                            .encode(serde_json::json!(doc).to_string())
+                            .as_bytes(),
+                        content_type: &DIDMIMEType::JSON.to_string(),
+                    },
+                )?;
+            }
+            DIDMIMEType::CBOR => {
+                let mut inner = std::io::Cursor::new(Vec::new());
+                ciborium::ser::into_writer(&doc, &mut inner)?;
+                let buf = URL_SAFE_NO_PAD.encode(&inner.into_inner());
+
+                let payload = SignedPayload {
+                    payload: buf.as_bytes(),
+                    content_type: &DIDMIMEType::CBOR.to_string(),
+                };
+
+                ciborium::ser::into_writer(&payload, &mut writer)?;
+            }
+        }
+
+        Ok(ModifiedData::Modified(
+            serialize_compact(
+                &writer.into_inner(),
+                &header,
+                &alg.signer_from_jwk(&self.signing_key)?,
+            )?
+            .as_bytes()
+            .to_vec(),
+        ))
+    }
+
     pub fn fetch_root(
         &self,
-        if_modified_since: SystemTime,
+        if_modified_since: Option<SystemTime>,
         mime: &str,
     ) -> Result<ModifiedData, anyhow::Error> {
         match self.driver.load_root() {
-            Ok((doc, time)) => match if_modified_since.duration_since(time) {
-                Ok(_) => {
-                    let mut writer = std::io::Cursor::new(Vec::new());
-
-                    match DIDMIMEType::from_str(mime)? {
-                        DIDMIMEType::CBOR => {
-                            ciborium::ser::into_writer(&doc, &mut writer)?;
-                        }
-                        DIDMIMEType::JSON => {
-                            serde_json::to_writer(&mut writer, &doc)?;
-                        }
+            Ok((doc, time)) => {
+                if let Some(if_modified_since) = if_modified_since {
+                    match if_modified_since.duration_since(time) {
+                        Ok(_) => self.encode_root(doc, mime),
+                        Err(_) => Ok(ModifiedData::NotModified),
                     }
-
-                    Ok(ModifiedData::Modified(writer.into_inner()))
+                } else {
+                    self.encode_root(doc, mime)
                 }
-                Err(_) => Ok(ModifiedData::NotModified),
-            },
+            }
             Err(e) => Err(e.into()),
         }
     }
@@ -114,62 +171,20 @@ impl<SD: StorageDriver> Storage<SD> {
     pub fn fetch(
         &self,
         name: &str,
-        if_modified_since: SystemTime,
+        if_modified_since: Option<SystemTime>,
         mime: &str,
     ) -> Result<ModifiedData, anyhow::Error> {
         match self.driver.load(name) {
-            Ok((doc, time)) => match if_modified_since.duration_since(time) {
-                Ok(_) => {
-                    let alg = jwk_alg_to_signing_alg(jwk_alg_from_str(
-                        self.signing_key.algorithm().map_or_else(
-                            || Err(anyhow!("Invalid algorithm specified")),
-                            |s| Ok(s),
-                        )?,
-                    )?);
-
-                    let mut header = JwsHeader::new();
-                    header.set_algorithm(alg.to_string());
-
-                    let mut writer = std::io::Cursor::new(Vec::new());
-
-                    match DIDMIMEType::from_str(mime)? {
-                        DIDMIMEType::JSON => {
-                            serde_json::to_writer(
-                                &mut writer,
-                                &SignedPayload {
-                                    payload: URL_SAFE_NO_PAD
-                                        .encode(serde_json::json!(doc).to_string())
-                                        .as_bytes(),
-                                    content_type: &DIDMIMEType::JSON.to_string(),
-                                },
-                            )?;
-                        }
-                        DIDMIMEType::CBOR => {
-                            let mut inner = std::io::Cursor::new(Vec::new());
-                            ciborium::ser::into_writer(&doc, &mut inner)?;
-                            let buf = URL_SAFE_NO_PAD.encode(&inner.into_inner());
-
-                            let payload = SignedPayload {
-                                payload: buf.as_bytes(),
-                                content_type: &DIDMIMEType::CBOR.to_string(),
-                            };
-
-                            ciborium::ser::into_writer(&payload, &mut writer)?;
-                        }
+            Ok((doc, time)) => {
+                if let Some(if_modified_since) = if_modified_since {
+                    match if_modified_since.duration_since(time) {
+                        Ok(_) => self.encode_user(doc, mime),
+                        Err(_) => Ok(ModifiedData::NotModified),
                     }
-
-                    Ok(ModifiedData::Modified(
-                        serialize_compact(
-                            &writer.into_inner(),
-                            &header,
-                            &alg.signer_from_jwk(&self.signing_key)?,
-                        )?
-                        .as_bytes()
-                        .to_vec(),
-                    ))
+                } else {
+                    self.encode_user(doc, mime)
                 }
-                Err(_) => Ok(ModifiedData::NotModified),
-            },
+            }
             Err(e) => Err(e.into()),
         }
     }
