@@ -148,7 +148,7 @@ async fn configure_routes<
     S: StorageFetcher + Clone + Send + ?Sized + 'static,
     T: davisjr::TransientState,
 >(
-    mut app: App<S, T>,
+    app: &mut App<S, T>,
 ) -> Result<(), davisjr::Error> {
     app.get("/fan.did", compose_handler!(get_root))?;
     app.get("/user/:name", compose_handler!(get_user))?;
@@ -166,7 +166,14 @@ async fn boot_filesystem(
         signing_key,
     };
 
-    let app: App<FileSystemState, NoState> = App::with_state(FileSystemState { storage });
+    let mut app: App<FileSystemState, NoState> = App::with_state(FileSystemState { storage });
+
+    match configure_routes(&mut app).await {
+        Ok(()) => {}
+        // FIXME fix this in davisjr
+        Err(e) => return Err(ServerError::from(&format!("{:?}", e))),
+    }
+
     app.serve(addr).await?;
 
     Ok(())
