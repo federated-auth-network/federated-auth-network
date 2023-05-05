@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crate::mime::{DIDMIMEType, ModifiedData};
 use anyhow::anyhow;
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};
 use did_toolkit::prelude::*;
@@ -10,35 +11,6 @@ use serde::Serialize;
 use std::{path::PathBuf, str::FromStr, time::SystemTime};
 
 const ROOT_DID: &str = "fan.did";
-
-pub(crate) enum DIDMIMEType {
-    JSON,
-    CBOR,
-}
-
-impl FromStr for DIDMIMEType {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, anyhow::Error> {
-        match s {
-            "application/json+did" => Ok(Self::JSON),
-            // we don't directly support JSON-LD, but we should be able to consume it
-            "application/jsonld+did" => Ok(Self::JSON),
-            "application/cbor+did" => Ok(Self::CBOR),
-            _ => Err(anyhow!("Invalid MIME type")),
-        }
-    }
-}
-
-impl ToString for DIDMIMEType {
-    fn to_string(&self) -> String {
-        match self {
-            Self::JSON => "application/json+did",
-            Self::CBOR => "application/cbor+did",
-        }
-        .to_string()
-    }
-}
 
 #[inline]
 fn jwk_alg_to_signing_alg(alg: EcCurve) -> EcdsaJwsAlgorithm {
@@ -68,22 +40,18 @@ pub(crate) struct SignedPayload<'a> {
     content_type: &'a str,
 }
 
-pub(crate) enum ModifiedData {
-    Modified(Vec<u8>),
-    NotModified,
-}
-
 pub(crate) trait StorageDriver {
     fn load_user(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error>;
     fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error>;
 }
 
-pub(crate) struct Storage<SD: StorageDriver> {
-    driver: SD,
-    signing_key: Jwk,
+#[derive(Clone)]
+pub(crate) struct Storage<SD: StorageDriver + Clone + Send + ?Sized> {
+    pub driver: Box<SD>,
+    pub signing_key: Jwk,
 }
 
-impl<SD: StorageDriver> Storage<SD> {
+impl<SD: StorageDriver + Clone + Send + ?Sized> Storage<SD> {
     fn encode_root(&self, doc: Document, mime: &str) -> Result<ModifiedData, anyhow::Error> {
         let mut writer = std::io::Cursor::new(Vec::new());
 
@@ -190,12 +158,13 @@ impl<SD: StorageDriver> Storage<SD> {
     }
 }
 
-pub(crate) struct FileSystemStorage<'a> {
-    root: &'a str,
-    cbor: bool,
+#[derive(Clone)]
+pub(crate) struct FileSystemStorage {
+    pub root: PathBuf,
+    pub cbor: bool,
 }
 
-impl FileSystemStorage<'_> {
+impl FileSystemStorage {
     fn load_doc(&self, path: PathBuf) -> Result<(Document, SystemTime), anyhow::Error> {
         let f = std::fs::OpenOptions::new();
         let io = f.open(path)?;
@@ -213,9 +182,11 @@ impl FileSystemStorage<'_> {
     }
 }
 
-impl StorageDriver for FileSystemStorage<'_> {
+impl StorageDriver for FileSystemStorage {
     fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error> {
-        let path = PathBuf::from(self.root).join(std::path::MAIN_SEPARATOR.to_string() + ROOT_DID);
+        let path = self
+            .root
+            .join(std::path::MAIN_SEPARATOR.to_string() + ROOT_DID);
         self.load_doc(path)
     }
 
@@ -224,7 +195,7 @@ impl StorageDriver for FileSystemStorage<'_> {
             return Err(anyhow!("name contains invalid characters"));
         }
 
-        let path = PathBuf::from(self.root).join(&format!(
+        let path = self.root.join(&format!(
             "{}user{}{}.did",
             std::path::MAIN_SEPARATOR,
             std::path::MAIN_SEPARATOR,
