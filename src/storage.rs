@@ -74,7 +74,7 @@ pub enum ModifiedData {
 }
 
 pub trait StorageDriver {
-    fn load(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error>;
+    fn load_user(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error>;
     fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error>;
 }
 
@@ -168,13 +168,13 @@ impl<SD: StorageDriver> Storage<SD> {
         }
     }
 
-    pub fn fetch(
+    pub fn fetch_user(
         &self,
         name: &str,
         if_modified_since: Option<SystemTime>,
         mime: &str,
     ) -> Result<ModifiedData, anyhow::Error> {
-        match self.driver.load(name) {
+        match self.driver.load_user(name) {
             Ok((doc, time)) => {
                 if let Some(if_modified_since) = if_modified_since {
                     match if_modified_since.duration_since(time) {
@@ -219,7 +219,7 @@ impl StorageDriver for FileSystemStorage<'_> {
         self.load_doc(path)
     }
 
-    fn load(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error> {
+    fn load_user(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error> {
         if name.contains(std::path::MAIN_SEPARATOR) {
             return Err(anyhow!("name contains invalid characters"));
         }
