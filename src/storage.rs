@@ -203,7 +203,7 @@ impl FileSystemStorage<'_> {
 
 impl StorageDriver for FileSystemStorage<'_> {
     fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error> {
-        let path = PathBuf::from(self.root).join("/".to_string() + ROOT_DID);
+        let path = PathBuf::from(self.root).join(std::path::MAIN_SEPARATOR.to_string() + ROOT_DID);
         self.load_doc(path)
     }
 
