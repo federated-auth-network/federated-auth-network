@@ -149,8 +149,7 @@ impl<SD: StorageDriver> Storage<SD> {
                         DIDMIMEType::CBOR => {
                             let mut inner = std::io::Cursor::new(Vec::new());
                             ciborium::ser::into_writer(&doc, &mut inner)?;
-                            let buf = inner.into_inner();
-                            let buf = URL_SAFE_NO_PAD.encode(&buf);
+                            let buf = URL_SAFE_NO_PAD.encode(&inner.into_inner());
 
                             let payload = SignedPayload {
                                 payload: buf.as_bytes(),
