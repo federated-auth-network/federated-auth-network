@@ -111,7 +111,7 @@ async fn get_user<
 
     modified(
         storage.fetch_user(&params["name"], None, &accept)?,
-        &accept,
+        "application/jose",
         req,
         state,
     )
