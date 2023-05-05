@@ -11,7 +11,7 @@ use std::{path::PathBuf, str::FromStr, time::SystemTime};
 
 const ROOT_DID: &str = "fan.did";
 
-pub enum DIDMIMEType {
+pub(crate) enum DIDMIMEType {
     JSON,
     CBOR,
 }
@@ -63,22 +63,22 @@ fn jwk_alg_from_str(s: &str) -> Result<EcCurve, anyhow::Error> {
 }
 
 #[derive(Serialize)]
-pub struct SignedPayload<'a> {
+pub(crate) struct SignedPayload<'a> {
     payload: &'a [u8],
     content_type: &'a str,
 }
 
-pub enum ModifiedData {
+pub(crate) enum ModifiedData {
     Modified(Vec<u8>),
     NotModified,
 }
 
-pub trait StorageDriver {
+pub(crate) trait StorageDriver {
     fn load_user(&self, name: &str) -> Result<(Document, SystemTime), anyhow::Error>;
     fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error>;
 }
 
-pub struct Storage<SD: StorageDriver> {
+pub(crate) struct Storage<SD: StorageDriver> {
     driver: SD,
     signing_key: Jwk,
 }
@@ -148,7 +148,7 @@ impl<SD: StorageDriver> Storage<SD> {
         ))
     }
 
-    pub fn fetch_root(
+    pub(crate) fn fetch_root(
         &self,
         if_modified_since: Option<SystemTime>,
         mime: &str,
@@ -168,7 +168,7 @@ impl<SD: StorageDriver> Storage<SD> {
         }
     }
 
-    pub fn fetch_user(
+    pub(crate) fn fetch_user(
         &self,
         name: &str,
         if_modified_since: Option<SystemTime>,
@@ -190,7 +190,7 @@ impl<SD: StorageDriver> Storage<SD> {
     }
 }
 
-pub struct FileSystemStorage<'a> {
+pub(crate) struct FileSystemStorage<'a> {
     root: &'a str,
     cbor: bool,
 }
