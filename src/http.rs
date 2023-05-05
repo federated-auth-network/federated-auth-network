@@ -72,14 +72,19 @@ fn if_modified_since(req: &Request<Body>) -> Result<Option<SystemTime>, anyhow::
 }
 
 #[inline]
-fn modified<T>(md: ModifiedData, accept: &str, req: Request<Body>, state: T) -> HTTPResult<T> {
+fn modified<T>(
+    md: ModifiedData,
+    content_type: &str,
+    req: Request<Body>,
+    state: T,
+) -> HTTPResult<T> {
     match md {
         ModifiedData::Modified(res) => Ok((
             req,
             Some(
                 Response::builder()
                     .status(200)
-                    .header("Content-type", accept)
+                    .header("Content-type", content_type)
                     .body(Body::from(res))
                     .unwrap(),
             ),
