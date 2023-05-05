@@ -103,9 +103,7 @@ impl<SD: StorageDriver> Storage<SD> {
                         }
                     }
 
-                    let res = writer.into_inner();
-
-                    Ok(ModifiedData::Modified(res))
+                    Ok(ModifiedData::Modified(writer.into_inner()))
                 }
                 Err(_) => Ok(ModifiedData::NotModified),
             },
