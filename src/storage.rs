@@ -9,6 +9,8 @@ use josekit::{
 use serde::Serialize;
 use std::{path::PathBuf, str::FromStr, time::SystemTime};
 
+const ROOT_DID: &str = "fan.did";
+
 pub enum DIDMIMEType {
     JSON,
     CBOR,
@@ -201,7 +203,7 @@ impl FileSystemStorage<'_> {
 
 impl StorageDriver for FileSystemStorage<'_> {
     fn load_root(&self) -> Result<(Document, SystemTime), anyhow::Error> {
-        let path = PathBuf::from(self.root).join("/fan.did");
+        let path = PathBuf::from(self.root).join("/".to_string() + ROOT_DID);
         self.load_doc(path)
     }
 
