@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::mime::{DIDMIMEType, ModifiedData};
 use anyhow::anyhow;
 use base64::engine::{general_purpose::URL_SAFE_NO_PAD, Engine};

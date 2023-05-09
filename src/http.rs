@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::{
     mime::{DIDMIMEType, ModifiedData},
     storage::{FileSystemStorage, Storage},
